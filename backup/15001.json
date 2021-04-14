@@ -1,0 +1,37 @@
+{
+ "behaviour": "moving",
+ "floor": 1,
+ "direction": "up",
+ "cabRequests": [
+  false,
+  false,
+  true,
+  false
+ ],
+ "hallRequests": [
+  [
+   false,
+   false
+  ],
+  [
+   false,
+   false
+  ],
+  [
+   false,
+   false
+  ],
+  [
+   false,
+   false
+  ]
+ ],
+ "ID": "15001",
+ "Obstruction": false,
+ "Stop": false,
+ "Elevstats": {
+  "CRV": 0,
+  "DoorOpenDuration": 0
+ },
+ "Online": true
+}

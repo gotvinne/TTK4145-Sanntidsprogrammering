@@ -1,0 +1,59 @@
+{
+ "hallRequests": [
+  [
+   true,
+   false
+  ],
+  [
+   false,
+   false
+  ],
+  [
+   false,
+   false
+  ],
+  [
+   false,
+   false
+  ]
+ ],
+ "states": {
+  "15000": {
+   "behaviour": 0,
+   "floor": 3,
+   "direction": 0,
+   "cabRequests": [
+    false,
+    false,
+    false,
+    false
+   ],
+   "hallRequests": [
+    [
+     false,
+     false
+    ],
+    [
+     false,
+     false
+    ],
+    [
+     false,
+     false
+    ],
+    [
+     false,
+     false
+    ]
+   ],
+   "ID": "15000",
+   "Obstruction": false,
+   "Stop": false,
+   "Elevstats": {
+    "CRV": 0,
+    "DoorOpenDuration": 0
+   },
+   "Online": true
+  }
+ }
+}
