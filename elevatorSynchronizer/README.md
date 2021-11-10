@@ -1,0 +1,5 @@
+**ElevatorSynchronizer** 
+--------------------------------------------------
+Made to synchronize the local elevators to make an elevator system where elevators are assigned requests depending on their state.
+
+The elevatorSynchronizer module recieves input in form of seperate hall- and cabrequests and elevator updates from the communication module. These inputs are from both the local elevator and the other elevators operating on the same network. Thereafter the state of all the elevators and their incoming requests are sent as input to the given hall_request_assigner algorithm, where the output is the optimal distribution of hallrequests across the available elevators on the network. The distribution of hallrequests is reassigned evey time hall_request_assigner recieves new data. The resulting optimal hallrequests of the local elevator are then sent to the local FSM module. 

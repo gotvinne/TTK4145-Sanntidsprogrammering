@@ -175,7 +175,7 @@ int timeToServeRequest(Elevator e_old, Button b, floor f){
 
 ```
 
-### Alternative 2: Reassigning all requests!
+### Alternative 2: Reassigning all requests
 
 For this alternative, all hall requests are reassigned whenever new data enters the system. This new data could be a new request, an updated state from some elevator, or an update on who is alive on the network. This redistribution means that a request is not necessarily assigned to the same elevator for the duration of its lifetime, but can instead be re-assigned to a new elevator, for example if a new idle elevator connects to the network, or the previously assigned elevator gets a lot of cab reqeusts.
 

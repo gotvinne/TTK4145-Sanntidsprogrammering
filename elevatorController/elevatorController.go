@@ -5,58 +5,58 @@ import (
 	elevio "github.com/TTK4145-Students-2021/project-group_16/elevio"
 )
 
-func HasOrdersAbove(e config.Elevator) bool {
-	for i := e.Floor + 1; i < config.TotalFloors; i++ {
+func HasRequestsAbove(elev config.Elevator) bool {
+	for floor := elev.Floor + 1; floor < config.TotalFloors; floor++ {
 		for btn := 0; btn < config.TotalHallButtons; btn++ {
-			if e.HallRequests[i][btn] {
+			if elev.LocalHallRequests[floor][btn] {
 				return true
 			}
 		}
-		if e.CabRequests[i] {
+		if elev.CabRequests[floor] {
 			return true
 		}
 	}
 	return false
 }
 
-func HasOrdersBelow(e config.Elevator) bool {
-	for i := 0; i < e.Floor; i++ {
+func HasRequestsBelow(elev config.Elevator) bool {
+	for floor := 0; floor < elev.Floor; floor++ {
 		for btn := 0; btn < config.TotalHallButtons; btn++ {
-			if e.HallRequests[i][btn] {
+			if elev.LocalHallRequests[floor][btn] {
 				return true
 			}
 		}
-		if e.CabRequests[i] {
+		if elev.CabRequests[floor] {
 			return true
 		}
 	}
 	return false
 }
 
-func ChooseDirection(e config.Elevator) elevio.MotorDirection {
+func ChooseDirection(elev config.Elevator) elevio.MotorDirection {
 
-	switch e.Direction {
+	switch elev.Direction {
 	case elevio.MDUp:
-		if HasOrdersAbove(e) {
+		if HasRequestsAbove(elev) {
 			return elevio.MDUp
-		} else if HasOrdersBelow(e) {
+		} else if HasRequestsBelow(elev) {
 			return elevio.MDDown
 		} else {
 			return elevio.MDStop
 		}
 
 	case elevio.MDDown:
-		if HasOrdersBelow(e) {
+		if HasRequestsBelow(elev) {
 			return elevio.MDDown
-		} else if HasOrdersAbove(e) {
+		} else if HasRequestsAbove(elev) {
 			return elevio.MDUp
 		} else {
 			return elevio.MDStop
 		}
 	case elevio.MDStop:
-		if HasOrdersAbove(e) {
+		if HasRequestsAbove(elev) {
 			return elevio.MDUp
-		} else if HasOrdersBelow(e) {
+		} else if HasRequestsBelow(elev) {
 			return elevio.MDDown
 		} else {
 			return elevio.MDStop
@@ -68,46 +68,47 @@ func ChooseDirection(e config.Elevator) elevio.MotorDirection {
 
 }
 
-func ShouldStop(e config.Elevator) bool {
-	switch e.Direction {
+func ShouldStop(elev config.Elevator) bool {
+	if elev.Floor == 0 || elev.Floor == config.TotalFloors { return true }
+	switch elev.Direction {
 	case elevio.MDUp:
-		return (e.HallRequests[e.Floor][elevio.BTHallUp] || e.CabRequests[e.Floor] || !(HasOrdersAbove(e)))
+		return (elev.LocalHallRequests[elev.Floor][elevio.BTHallUp] || elev.CabRequests[elev.Floor] || !(HasRequestsAbove(elev)))
 	case elevio.MDDown:
-		return (e.HallRequests[e.Floor][elevio.BTHallDown] || e.CabRequests[e.Floor] || !(HasOrdersBelow(e)))
+		return (elev.LocalHallRequests[elev.Floor][elevio.BTHallDown] || elev.CabRequests[elev.Floor] || !(HasRequestsBelow(elev)))
 	case elevio.MDStop:
 	}
 	return true
 }
 
-func ClearAtCurrentFloor(e *config.Elevator) {
-	switch e.Elevstats.CRV {
+func ClearAtCurrentFloor(elev *config.Elevator) {
+	switch elev.Elevstats.CRV {
 	case config.CVAll:
 		for btn := 0; btn < config.TotalHallButtons; btn++ {
-			e.HallRequests[e.Floor][btn] = false
+			elev.LocalHallRequests[elev.Floor][btn] = false
 		}
-		e.CabRequests[e.Floor] = false
+		elev.CabRequests[elev.Floor] = false
 		break
 	case config.CVInDirn:
-		e.CabRequests[e.Floor] = false
-		switch e.Direction {
+		elev.CabRequests[elev.Floor] = false
+		switch elev.Direction {
 		case elevio.MDUp:
-			e.HallRequests[e.Floor][elevio.BTHallUp] = false
-			if !HasOrdersAbove(*e) {
-				e.HallRequests[e.Floor][elevio.BTHallDown] = false
+			elev.LocalHallRequests[elev.Floor][elevio.BTHallUp] = false
+			if !HasRequestsAbove(*elev) {
+				elev.LocalHallRequests[elev.Floor][elevio.BTHallDown] = false
 			}
 			break
 
 		case elevio.MDDown:
-			e.HallRequests[e.Floor][elevio.BTHallDown] = false
-			if !HasOrdersBelow(*e) {
-				e.HallRequests[e.Floor][elevio.BTHallUp] = false
+			elev.LocalHallRequests[elev.Floor][elevio.BTHallDown] = false
+			if !HasRequestsBelow(*elev) {
+				elev.LocalHallRequests[elev.Floor][elevio.BTHallUp] = false
 			}
 			break
 
 		case elevio.MDStop:
 		default:
-			e.HallRequests[e.Floor][elevio.BTHallUp] = false
-			e.HallRequests[e.Floor][elevio.BTHallDown] = false
+			elev.LocalHallRequests[elev.Floor][elevio.BTHallUp] = false
+			elev.LocalHallRequests[elev.Floor][elevio.BTHallDown] = false
 			break
 		}
 		break

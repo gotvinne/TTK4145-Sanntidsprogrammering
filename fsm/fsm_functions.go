@@ -1,18 +1,36 @@
 package fsm
 
 import (
+	"encoding/json"
+	"flag"
 	"fmt"
+	"io/ioutil"
+	"os"
+	"strconv"
 	"time"
 
 	"github.com/TTK4145-Students-2021/project-group_16/config"
-	ec "github.com/TTK4145-Students-2021/project-group_16/elevatorController"
+	elevControl "github.com/TTK4145-Students-2021/project-group_16/elevatorController"
 	"github.com/TTK4145-Students-2021/project-group_16/elevio"
 )
 
-func SetAllLocalLights(e *config.Elevator) {
-	//Only sets CabRequests
+func GetPortID() string {
+
+	elevIDPtr := flag.Int("id", 0, "HeisID")
+	flag.Parse()
+
+	if *elevIDPtr < 15000 {
+		fmt.Println("Missing or wrongly typed portID")
+		os.Exit(1)
+	}
+
+	elevID := strconv.Itoa(*elevIDPtr)
+	return elevID
+}
+
+func setLocalCabLights(elev *config.Elevator) {
 	for floor := 0; floor < config.TotalFloors; floor++ {
-		if e.CabRequests[floor] {
+		if elev.CabRequests[floor] {
 			elevio.SetButtonLamp(elevio.ButtonType(elevio.BTCab), floor, true)
 		} else {
 			elevio.SetButtonLamp(elevio.ButtonType(elevio.BTCab), floor, false)
@@ -20,154 +38,177 @@ func SetAllLocalLights(e *config.Elevator) {
 	}
 }
 
-func ArrivedAtFloor(e *config.Elevator, currentFloor int, doorTimer *time.Timer) {
-	e.Floor = currentFloor
-	elevio.SetFloorIndicator(e.Floor)
-	switch e.Behaviour {
+func arrivedAtFloor(elev *config.Elevator, currentFloor int, doorTimer *time.Timer, motorErrorTimer *time.Timer) {
+	motorErrorTimer.Reset(timeUntilMotorError)
+	elev.Floor = currentFloor
+	elevio.SetFloorIndicator(elev.Floor)
+	switch elev.Behaviour {
 	case config.Moving:
-		if ec.ShouldStop(*e) {
+		if elevControl.ShouldStop(*elev) {
 			elevio.SetMotorDirection(elevio.MDStop)
 			elevio.SetDoorOpenLamp(true)
-			ec.ClearAtCurrentFloor(e)
-			SetAllLocalLights(e)
-			e.Behaviour = config.DoorOpen
-			doorTimer.Reset(3 * time.Second)
+			elevControl.ClearAtCurrentFloor(elev)
+			setLocalCabLights(elev)
+			elev.Behaviour = config.DoorOpen
+			doorTimer.Reset(doorOpenDuration)
 		}
-		break
 	default:
 		break
 	}
 }
 
-func NewOrderHandler(e *config.Elevator, newOrder elevio.ButtonEvent, channels config.FsmChannels, doorTimer *time.Timer) {
-	elevio.SetButtonLamp(newOrder.Button, newOrder.Floor, true)
-	switch e.Behaviour {
+func newRequestHandler(elev *config.Elevator, newRequest elevio.ButtonEvent, doorTimer *time.Timer, motorErrorTimer *time.Timer) {
+	switch elev.Behaviour {
 	case config.DoorOpen:
-		if e.Floor == newOrder.Floor {
-			//DoorTimer.Reset(config.DoorOpenTime)
-			doorTimer.Reset(3 * time.Second)
-			if newOrder.Button == elevio.BTCab {
-				e.CabRequests[newOrder.Floor] = false
+		if elev.Floor == newRequest.Floor {
+			doorTimer.Reset(doorOpenDuration)
+			if newRequest.Button == elevio.BTCab {
+				elev.CabRequests[newRequest.Floor] = false
 			} else {
-				e.HallRequests[newOrder.Floor][newOrder.Button] = false
+				elev.LocalHallRequests[newRequest.Floor][newRequest.Button] = false
 			}
 		} else {
-			if newOrder.Button == elevio.BTCab {
-				e.CabRequests[newOrder.Floor] = true
+			if newRequest.Button == elevio.BTCab {
+				elev.CabRequests[newRequest.Floor] = true
 			} else {
-				e.HallRequests[newOrder.Floor][newOrder.Button] = true
+				elev.LocalHallRequests[newRequest.Floor][newRequest.Button] = true
 			}
 		}
-		break
 	case config.Moving:
-		if newOrder.Button == elevio.BTCab {
-			e.CabRequests[newOrder.Floor] = true
+		if newRequest.Button == elevio.BTCab {
+			elev.CabRequests[newRequest.Floor] = true
 		} else {
-			e.HallRequests[newOrder.Floor][newOrder.Button] = true
+			elev.LocalHallRequests[newRequest.Floor][newRequest.Button] = true
 		}
-		break
 	case config.Idle:
-		if e.Floor == newOrder.Floor && (elevio.GetFloor() != -1) {
+		if elev.Floor == newRequest.Floor {
 			elevio.SetDoorOpenLamp(true)
-			e.Behaviour = config.DoorOpen
-			doorTimer.Reset(3 * time.Second)
-		} else if e.Floor == newOrder.Floor && (elevio.GetFloor() == -1) {
-			fmt.Printf("%v", "Rar Case!!!!")
-			if newOrder.Button == elevio.BTCab {
-				e.CabRequests[newOrder.Floor] = true
-			} else {
-				e.HallRequests[newOrder.Floor][newOrder.Button] = true
-			}
-			if e.Direction == elevio.MDUp {
-				elevio.SetMotorDirection(elevio.MDDown)
-			} else if e.Direction == elevio.MDDown {
-				elevio.SetMotorDirection(elevio.MDUp)
-			}
-			e.Behaviour = config.Moving
-		} else if e.Floor != newOrder.Floor && (elevio.GetFloor() == -1) {
-			if newOrder.Button == elevio.BTCab {
-				e.CabRequests[newOrder.Floor] = true
-			} else {
-				e.HallRequests[newOrder.Floor][newOrder.Button] = true
-			}
-			elevio.SetMotorDirection(ec.ChooseDirection(*e))
-			e.Behaviour = config.Moving
+			elev.Behaviour = config.DoorOpen
+			doorTimer.Reset(doorOpenDuration)
 		} else {
-			if newOrder.Button == elevio.BTCab {
-				e.CabRequests[newOrder.Floor] = true
+			if newRequest.Button == elevio.BTCab {
+				elev.CabRequests[newRequest.Floor] = true
 			} else {
-				e.HallRequests[newOrder.Floor][newOrder.Button] = true
+				elev.LocalHallRequests[newRequest.Floor][newRequest.Button] = true
 			}
-			e.Direction = ec.ChooseDirection(*e)
-			elevio.SetMotorDirection(e.Direction)
-			e.Behaviour = config.Moving
+			elev.Direction = elevControl.ChooseDirection(*elev)
+			elevio.SetMotorDirection(elev.Direction)
+			elev.Behaviour = config.Moving
+			motorErrorTimer.Reset(timeUntilMotorError)
 
 		}
-		break
 	}
-	SetAllLocalLights(e)
+	setLocalCabLights(elev)
 }
 
-func OnDoorTimeout(e *config.Elevator, channels config.FsmChannels, DoorTimer *time.Timer) {
-	switch e.Behaviour {
+func onDoorTimeout(elev *config.Elevator, DoorTimer *time.Timer, motorErrorTimer *time.Timer, transmitEnable chan<- bool) {
+	switch elev.Behaviour {
 	case config.DoorOpen:
-		if !(e.Obstruction) {
-			e.Direction = ec.ChooseDirection(*e)
+		if !(elev.Obstruction) {
+			elev.Direction = elevControl.ChooseDirection(*elev)
 			elevio.SetDoorOpenLamp(false)
-			elevio.SetMotorDirection(e.Direction)
-			if e.Direction == elevio.MDStop {
-				e.Behaviour = config.Idle
+			elevio.SetMotorDirection(elev.Direction)
+			elev.Online = true
+			transmitEnable <- true
+			if elev.Direction == elevio.MDStop {
+				elev.Behaviour = config.Idle
 			} else {
-				e.Behaviour = config.Moving
+				elev.Behaviour = config.Moving
+				motorErrorTimer.Reset(timeUntilMotorError)
 			}
 		}
-		break
 	default:
 		break
 	}
 }
 
-func ObstructionHandler(e *config.Elevator, obstruction bool, DoorTimer *time.Timer) {
-	e.Obstruction = obstruction
-	switch e.Behaviour {
+func obstructionHandler(elev *config.Elevator, obstructionHigh bool, DoorTimer *time.Timer) {
+	elev.Obstruction = obstructionHigh
+	switch elev.Behaviour {
 	case config.DoorOpen:
-		if !(e.Obstruction) {
-			DoorTimer.Reset(3 * time.Second)
+		if elev.Obstruction {
+			DoorTimer.Reset(doorOpenDuration)
+		} else {
+			DoorTimer.Reset(doorOpenDuration)
 		}
-		break
 	default:
 		break
 	}
 }
 
-func StopHandler(e *config.Elevator, channels config.FsmChannels, stop bool, DoorTimer *time.Timer) {
-	switch e.Behaviour {
-	case config.Stop:
-		elevio.SetStopLamp(false)
-		if elevio.GetFloor() != -1 {
-			DoorTimer.Reset(3 * time.Second)
-			e.Behaviour = config.DoorOpen
-		} else {
-			e.Behaviour = config.Idle
-		}
-		break
-
-	default:
-		elevio.SetStopLamp(true)
-		e.Behaviour = config.Stop
-		//clearing all orders
-		for f := 0; f < config.TotalFloors; f++ {
-			for btn := 0; btn < config.TotalHallButtons; btn++ {
-				e.HallRequests[f][btn] = false
-			}
-			e.CabRequests[f] = false
-		}
-		elevio.SetMotorDirection(elevio.MDStop)
-		SetAllLocalLights(e)
-		if elevio.GetFloor() != -1 {
-			elevio.SetDoorOpenLamp(true)
-		}
-		break
+func motorErrorHandler(elev *config.Elevator, transmitEnable chan<- bool, motorErrorTimer *time.Timer) {
+	if elevControl.HasRequestsAbove(*elev) || elevControl.HasRequestsBelow(*elev) {
+		transmitEnable <- false
+		elev.Online = false
+		fmt.Printf("Motor error detected - going offline\n")
+	} else {
+		motorErrorTimer.Reset(timeUntilMotorError)
 	}
-	SetAllLocalLights(e)
+}
+
+func initializeElevator(elevID string, floorChannel <-chan int, doorTimer *time.Timer, motorErrorTimer *time.Timer) config.Elevator {
+	elevio.Init("localhost:"+elevID, config.TotalFloors)
+
+	stats := config.Stats{
+		CRV: config.CVAll,
+	}
+	elev := config.Elevator{
+		Behaviour:   config.Idle,
+		Floor:       -1,
+		Direction:   elevio.MDStop,
+		ID:          elevID,
+		Obstruction: false,
+		Elevstats:   stats,
+		Online:      true,
+	}
+
+	loadRequestsFromBackup(&elev)
+
+	select {
+	case currentFloor := <-floorChannel:
+		fmt.Printf("currentFloor := <-fsmChannels.Floor: \n")
+		fmt.Printf("This is my currentfloor: ")
+		fmt.Printf("%v", currentFloor)
+		arrivedAtFloor(&elev, currentFloor, doorTimer, motorErrorTimer)
+		break
+	default:
+		elev.Behaviour = config.Moving
+		motorErrorTimer.Reset(timeUntilMotorError)
+		elevio.SetMotorDirection(elevio.MDDown)
+	}
+	return elev
+}
+
+func saveRequestsToBackup(elev config.Elevator) {
+	backupRequests := BackupRequests{
+		BackupLocalHallRequests: elev.LocalHallRequests,
+		BackupCabRequests:       elev.CabRequests,
+	}
+	backupFile, _ := json.MarshalIndent(backupRequests, "", " ")
+	_ = ioutil.WriteFile("backupRequests/"+elev.ID+".json", backupFile, 0644)
+}
+
+func loadRequestsFromBackup(elev *config.Elevator) {
+	backupFile, err := ioutil.ReadFile("backupRequests/" + elev.ID + ".json")
+	if err != nil {
+		fmt.Printf("\n No backup found \n")
+	} else {
+		var requestsFromBackup BackupRequests
+		_ = json.Unmarshal([]byte(backupFile), &requestsFromBackup)
+		elev.CabRequests = requestsFromBackup.BackupCabRequests
+		elev.LocalHallRequests = requestsFromBackup.BackupLocalHallRequests
+		fmt.Printf("\n Requests loaded from backup \n")
+	}
+}
+
+func setAllHallLights(hallRequests [config.TotalFloors][config.TotalHallButtons]bool) {
+	for floor := 0; floor < config.TotalFloors; floor++ {
+		for btn := 0; btn < config.TotalHallButtons; btn++ {
+			if hallRequests[floor][btn] {
+				elevio.SetButtonLamp(elevio.ButtonType(btn), floor, true)
+			} else {
+				elevio.SetButtonLamp(elevio.ButtonType(btn), floor, false)
+			}
+		}
+	}
 }
